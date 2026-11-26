@@ -1,12 +1,13 @@
 <?php
 
+
 require_once __DIR__ . '/../config/config.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Conexión a base de daots 
+// ---------- Conexión ----------
 function db_connect()
 {
     static $conn = null;
@@ -21,8 +22,13 @@ function db_connect()
         $e = oci_error();
         die('Error de conexión a Oracle: ' . htmlspecialchars($e['message']));
     }
+
+    $st = oci_parse($conn, 'ALTER SESSION SET CURRENT_SCHEMA = ' . DB_SCHEMA);
+    oci_execute($st);
     return $conn;
 }
+
+
 function db_select($sql, $params = [])
 {
     $conn = db_connect();
@@ -40,6 +46,7 @@ function db_select($sql, $params = [])
     }
     return $rows;
 }
+
 
 function demo_init()
 {
@@ -88,7 +95,6 @@ function nombre_por_id($lista, $campo, $id)
     return '?';
 }
 
-
 function get_categorias()
 {
     if (DEMO_MODE) { return demo()['categorias']; }
@@ -125,21 +131,20 @@ function get_clientes()
 function get_ventas()
 {
     if (DEMO_MODE) { return array_reverse(demo()['ventas']); }
-    return db_select("SELECT v.id_venta, TO_CHAR(v.fecha_venta,'YYYY-MM-DD HH24:MI') AS fecha_venta,
-                             v.total_venta, c.nombre AS cliente, u.nombre AS usuario
-                        FROM venta v
-                        JOIN cliente c ON c.id_cliente = v.id_cliente
-                        JOIN usuario u ON u.id_usuario = v.id_usuario
-                       ORDER BY v.id_venta DESC");
+
+    return db_select("SELECT id_venta, TO_CHAR(fecha_venta,'YYYY-MM-DD HH24:MI') AS fecha_venta,
+                             total_venta, cliente, usuario
+                        FROM v_ventas
+                       ORDER BY id_venta DESC");
 }
 
 function get_compras()
 {
     if (DEMO_MODE) { return array_reverse(demo()['compras']); }
-    return db_select("SELECT c.id_compra, TO_CHAR(c.fecha_compra,'YYYY-MM-DD HH24:MI') AS fecha_compra,
-                             c.total_compra, p.nombre AS proveedor
-                        FROM compra c JOIN proveedor p ON p.id_proveedor = c.id_proveedor
-                       ORDER BY c.id_compra DESC");
+    return db_select("SELECT id_compra, TO_CHAR(fecha_compra,'YYYY-MM-DD HH24:MI') AS fecha_compra,
+                             total_compra, proveedor
+                        FROM v_compras
+                       ORDER BY id_compra DESC");
 }
 
 
@@ -152,7 +157,7 @@ function crear_producto($nombre, $desc, $precio, $stock_min, $id_categoria)
             'stock_minimo' => $stock_min, 'id_categoria' => $id_categoria];
         return;
     }
-    
+
     $conn = db_connect();
     $st = oci_parse($conn, 'BEGIN SP_CREAR_PRODUCTO(:n, :d, :p, :m, :c); END;');
     oci_bind_by_name($st, ':n', $nombre);
@@ -199,7 +204,6 @@ function crear_proveedor($nombre, $tel, $correo, $dir)
     if (!@oci_execute($st)) { $e = oci_error($st); throw new Exception($e['message']); }
 }
 
-
 function registrar_venta($id_cliente, $items)
 {
     if (DEMO_MODE) {
@@ -231,7 +235,7 @@ function registrar_venta($id_cliente, $items)
 
     $conn = db_connect();
     try {
-       
+    
         $st = oci_parse($conn, 'BEGIN SP_CREAR_VENTA(:cli, :usr, :idv); END;');
         $usr = ID_USUARIO_ACTUAL;
         $idv = 0;
@@ -299,6 +303,8 @@ function registrar_compra($id_proveedor, $items)
     }
 }
 
+//Utilidades
+// ---------- Utilidades ----------
 function h($s)
 {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
